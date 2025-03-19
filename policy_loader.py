@@ -31,7 +31,7 @@ def build_faiss_index():
 
         # Save FAISS index
         with open(FAISS_INDEX_PATH, "wb") as f:
-            pickle.dump(vector_store, f)
+            pickle.dump((vector_store, policy_chunks), f)  
         print("✅ FAISS index saved successfully!")
 
         # Save policy chunks (metadata)

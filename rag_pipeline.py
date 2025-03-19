@@ -20,66 +20,55 @@ model = AutoModelForCausalLM.from_pretrained("gpt2")
 
 # Load FAISS Index and Metadata
 def load_faiss_index():
-    """
-    Loads the FAISS index, document texts, and embeddings.
-    """
+    """Loads the FAISS index and retrieves stored policy text."""
     try:
-        # Load FAISS index
         with open(FAISS_INDEX_PATH, "rb") as f:
-            vector_store = pickle.load(f)
+            vector_store, policy_chunks = pickle.load(f)  # ✅ Load both FAISS & text chunks
 
-        # Load policy document texts (ensure this file exists!)
-        metadata_path = FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl")
-        with open(metadata_path, "rb") as f:
-            documents = pickle.load(f)  # ✅ Load document texts
-
-        # Load embeddings
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-        print("✅ FAISS Index, documents, and embeddings loaded successfully!")
-        return vector_store, documents, embeddings  # ✅ Ensure 3 return values
+        print("✅ FAISS Index and policy text loaded successfully!")
+        return vector_store, policy_chunks, embeddings  # ✅ Return stored policy chunks
+
     except Exception as e:
         print(f"❌ Error loading FAISS index: {e}")
-        return None, None, None
+        return None, None, None  # Handle errors gracefully
 
 
 
 # Initialize FAISS and Embeddings
-vector_store, documents, embeddings = load_faiss_index()
+vector_store, policy_chunks, embeddings = load_faiss_index()
 
 
-def query_faiss(user_query, vector_store, documents, embeddings):
-    """Retrieves the closest matching policy chunk from FAISS and returns relevant information."""
-    
-    if vector_store is None or embeddings is None:
-        return "❌ FAISS index is not loaded correctly.", 0.0
+def query_faiss(user_query, vector_store, policy_chunks, embeddings):
+    """Retrieves the closest matching policy chunk from FAISS and formats a human-like response."""
 
-    # Convert the query into an embedding
+    if vector_store is None or embeddings is None or policy_chunks is None:
+        return "I'm sorry, I am unable to access the policy database right now. Please try again later.", 0.0
+
+    # Convert query into an embedding
     query_embedding = embeddings.embed_query(user_query)
-    query_embedding = np.array([query_embedding]).astype("float32")  # Ensure FAISS accepts numpy array
+    query_embedding = np.array([query_embedding]).astype("float32")  # Ensure compatibility
 
-    # Retrieve top-k matches from FAISS
-    D, I = vector_store.index.search(query_embedding, k=2)  # Get top 2 matches
+    # Retrieve top 2 matches from FAISS
+    D, I = vector_store.index.search(query_embedding, k=2)
 
-    # Debugging output
     print(f"🔍 Query: {user_query}")
     print(f"✅ Retrieved indices: {I[0]}")
     print(f"✅ Similarity scores: {D[0]}")
 
-    # **Lower similarity threshold** to ensure results are not ignored
-    if len(I[0]) == 0 or D[0][0] > 1.2:  # **Adjust the threshold**
-        return "Sorry, I couldn't find relevant information.", 0.5
+    if len(I[0]) == 0 or D[0][0] > 1.0:  # Adjust threshold if needed
+        return "I'm sorry, but I couldn't find that information. You can visit our website or contact customer support for further assistance.", 0.5
 
-    # Retrieve document texts based on indices
-    retrieved_texts = [documents[idx] for idx in I[0] if idx != -1 and idx < len(documents)]
-    
-    # **Check if retrieved_texts is empty**
+    # ✅ Retrieve stored policy text using the FAISS index
+    retrieved_texts = [policy_chunks[idx] for idx in I[0] if idx != -1]
+
     if not retrieved_texts:
-        print("❌ No relevant documents found!")
-        return "Sorry, I couldn't find relevant information.", 0.5
+        return "I'm sorry, but I couldn't find that information. Please check our website or contact support.", 0.5
 
-    retrieved_text = "\n".join(retrieved_texts)
-    print(f"📜 Retrieved Text:\n{retrieved_text}")  # Debugging output
+    # ✅ Format response in a human-like way
+    formatted_response = f"Based on our company policy:\n\n{retrieved_texts[0]}\n\nWould you like more details on this?"
 
-    return retrieved_text, 0.9
+    return formatted_response, 0.9
+
 
