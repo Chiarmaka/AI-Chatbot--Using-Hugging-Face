@@ -1,42 +1,85 @@
-import faiss
+import os
 import pickle
-import torch
+import numpy as np
+import faiss
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.text_splitter import RecursiveCharacterTextSplitter
-
 from config import FAISS_INDEX_PATH
 
-# Load tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
-model = AutoModelForCausalLM.from_pretrained("openai-community/gpt2")
-model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-def load_faiss():
-    """Loads FAISS index from file."""
-    index = faiss.read_index(FAISS_INDEX_PATH)
-    with open(FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl"), "rb") as f:
-        vector_store = pickle.load(f)
-    return index, vector_store
+# Load Hugging Face Authentication Token
+HF_AUTH_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+if not HF_AUTH_TOKEN:
+    raise ValueError("❌ Hugging Face API token is missing. Set it as an environment variable.")
 
-index, vector_store = load_faiss()
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+# Load Tokenizer & Model
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2")
 
-def query_faiss(user_query):
-    """Retrieves closest policy chunk and generates response."""
+
+# Load FAISS Index and Metadata
+def load_faiss_index():
+    """
+    Loads the FAISS index, document texts, and embeddings.
+    """
+    try:
+        # Load FAISS index
+        with open(FAISS_INDEX_PATH, "rb") as f:
+            vector_store = pickle.load(f)
+
+        # Load policy document texts (ensure this file exists!)
+        metadata_path = FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl")
+        with open(metadata_path, "rb") as f:
+            documents = pickle.load(f)  # ✅ Load document texts
+
+        # Load embeddings
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+        print("✅ FAISS Index, documents, and embeddings loaded successfully!")
+        return vector_store, documents, embeddings  # ✅ Ensure 3 return values
+    except Exception as e:
+        print(f"❌ Error loading FAISS index: {e}")
+        return None, None, None
+
+
+
+# Initialize FAISS and Embeddings
+vector_store, documents, embeddings = load_faiss_index()
+
+
+def query_faiss(user_query, vector_store, documents, embeddings):
+    """Retrieves the closest matching policy chunk from FAISS and returns relevant information."""
+    
+    if vector_store is None or embeddings is None:
+        return "❌ FAISS index is not loaded correctly.", 0.0
+
+    # Convert the query into an embedding
     query_embedding = embeddings.embed_query(user_query)
-    D, I = index.search([query_embedding], k=1)  # Retrieve top match
+    query_embedding = np.array([query_embedding]).astype("float32")  # Ensure FAISS accepts numpy array
 
-    if len(I[0]) == 0 or D[0][0] > 0.5:  # Threshold for match
+    # Retrieve top-k matches from FAISS
+    D, I = vector_store.index.search(query_embedding, k=2)  # Get top 2 matches
+
+    # Debugging output
+    print(f"🔍 Query: {user_query}")
+    print(f"✅ Retrieved indices: {I[0]}")
+    print(f"✅ Similarity scores: {D[0]}")
+
+    # **Lower similarity threshold** to ensure results are not ignored
+    if len(I[0]) == 0 or D[0][0] > 1.2:  # **Adjust the threshold**
         return "Sorry, I couldn't find relevant information.", 0.5
 
-    retrieved_text = vector_store[I[0][0]]  # Retrieve relevant policy text
+    # Retrieve document texts based on indices
+    retrieved_texts = [documents[idx] for idx in I[0] if idx != -1 and idx < len(documents)]
+    
+    # **Check if retrieved_texts is empty**
+    if not retrieved_texts:
+        print("❌ No relevant documents found!")
+        return "Sorry, I couldn't find relevant information.", 0.5
 
-    # Generate AI response using GPT-2
-    inputs = tokenizer(f"User: {user_query}\nAI: ", return_tensors="pt", padding=True)
-    outputs = model.generate(**inputs, max_length=150)
-    generated_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    retrieved_text = "\n".join(retrieved_texts)
+    print(f"📜 Retrieved Text:\n{retrieved_text}")  # Debugging output
 
-    return generated_response, 0.9  # Assume high confidence
+    return retrieved_text, 0.9
 

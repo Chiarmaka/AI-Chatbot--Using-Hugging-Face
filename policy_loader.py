@@ -1,35 +1,47 @@
-import faiss
+import os
 import pickle
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from config import POLICY_FILE_PATH, FAISS_INDEX_PATH
 
 def load_policy():
-    """Loads company policy text."""
+    """Loads company policy text from file."""
     with open(POLICY_FILE_PATH, "r", encoding="utf-8") as file:
         return file.read()
 
 def build_faiss_index():
-    """Creates FAISS vector store from policy text."""
-    policy_text = load_policy()
+    try:
+        print("🚀 Building FAISS index...")
 
-    # Split into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    policy_chunks = text_splitter.split_text(policy_text)
+        # Load policy text
+        policy_text = load_policy()
+        print("✅ Policy text loaded.")
 
-    # Load Hugging Face embeddings
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # Split into chunks
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        policy_chunks = text_splitter.split_text(policy_text)
 
-    # Create FAISS index
-    vector_store = FAISS.from_texts(policy_chunks, embedding=embeddings)
+        # Load Hugging Face embeddings
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    # Save index
-    faiss.write_index(vector_store.index, FAISS_INDEX_PATH)
-    with open(FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl"), "wb") as f:
-        pickle.dump(vector_store, f)
+        # Create FAISS index
+        vector_store = FAISS.from_texts(policy_chunks, embedding=embeddings)
+        print("✅ FAISS index created.")
 
-    print("✅ FAISS index built successfully!")
+        # Save FAISS index
+        with open(FAISS_INDEX_PATH, "wb") as f:
+            pickle.dump(vector_store, f)
+        print("✅ FAISS index saved successfully!")
+
+        # Save policy chunks (metadata)
+        metadata_path = FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl")
+        with open(metadata_path, "wb") as f:
+            pickle.dump(policy_chunks, f)
+        print("✅ Policy metadata saved!")
+
+    except Exception as e:
+        print(f"❌ An error occurred: {e}")
 
 if __name__ == "__main__":
     build_faiss_index()
