@@ -27,21 +27,21 @@ def build_faiss_index():
 
         # Create FAISS index
         vector_store = FAISS.from_texts(policy_chunks, embedding=embeddings)
-        print("✅ FAISS index created.")
+        print(" FAISS index created.")
 
         # Save FAISS index
         with open(FAISS_INDEX_PATH, "wb") as f:
             pickle.dump((vector_store, policy_chunks), f)  
-        print("✅ FAISS index saved successfully!")
+        print(" FAISS index saved successfully!")
 
         # Save policy chunks (metadata)
         metadata_path = FAISS_INDEX_PATH.replace(".pkl", "_metadata.pkl")
         with open(metadata_path, "wb") as f:
             pickle.dump(policy_chunks, f)
-        print("✅ Policy metadata saved!")
+        print(" Policy metadata saved!")
 
     except Exception as e:
-        print(f"❌ An error occurred: {e}")
+        print(f" An error occurred: {e}")
 
 if __name__ == "__main__":
     build_faiss_index()

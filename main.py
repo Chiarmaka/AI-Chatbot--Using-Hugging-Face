@@ -1,11 +1,11 @@
 from rag_pipeline import query_faiss, load_faiss_index
 
 def main():
-    print("✅ Chatbot is ready! Type 'exit' to quit.")
+    print(" Chatbot is ready! Type 'exit' to quit.")
     
     vector_store, policy_chunks, embeddings = load_faiss_index()
     if vector_store is None or embeddings is None:
-        print("❌ Failed to load FAISS index. Chatbot cannot start.")
+        print(" Failed to load FAISS index. Chatbot cannot start.")
         return
 
     conversation_history = []  # Stores previous interactions

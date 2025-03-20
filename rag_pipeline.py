@@ -11,7 +11,7 @@ from config import FAISS_INDEX_PATH
 # Load Hugging Face Authentication Token
 HF_AUTH_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 if not HF_AUTH_TOKEN:
-    raise ValueError("❌ Hugging Face API token is missing. Set it as an environment variable.")
+    raise ValueError(" Hugging Face API token is missing. Set it as an environment variable.")
 
 # Load Tokenizer & Model
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -66,8 +66,8 @@ def query_faiss(user_query, vector_store, policy_chunks, embeddings):
     if not retrieved_texts:
         return "I'm sorry, but I couldn't find that information. Please check our website or contact support.", 0.5
 
-    # ✅ Format response in a human-like way
-    formatted_response = f"Based on our company policy:\n\n{retrieved_texts[0]}\n\nWould you like more details on this?"
+    #  Format response in a human-like way
+    formatted_response = f"Based on our company policy:\n\n{retrieved_texts[0]}\n"
 
     return formatted_response, 0.9
 
